@@ -1,49 +1,93 @@
 package com.bin.app;
 
-import java.util.regex.Pattern;
+import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.client.RestTemplate;
 
-import com.captcha.botdetect.web.servlet.Captcha;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 @Controller
 public class HelloController {
+	
+	private RestTemplate restTemplate;
 
-    @RequestMapping(value ="/home", method = RequestMethod.GET)
-    public String defaultPage(HttpServletRequest request, ModelMap model) {
-    	Captcha captcha = Captcha.load(request, "exampleCaptcha");
-    	captcha.setUserInputID("captchaCode");
-    	captcha.setHelpLinkEnabled(false);
-    	captcha.setCodeLength(6);
-    	captcha.setSoundEnabled(true);
-    	String captchaHtml = captcha.getHtml();
-    	String str = "<a href=\"//captcha.org/captcha.html?java\" title=\"What is BotDetect Java CAPTCHA Library?\" style=\"display: block !important; height: 10px !important; margin: 0 !important; padding: 0 !important; font-size: 9px !important; line-height: 10px !important; visibility: visible !important; font-family: Verdana, DejaVu Sans, Bitstream Vera Sans, Verdana Ref, sans-serif !important; vertical-align: middle !important; text-align: center !important; text-decoration: none !important; background-color: #f8f8f8 !important; color: #606060 !important;\">What is BotDetect Java CAPTCHA Library?</a>sss";
-//    	captchaHtml = str.replaceAll("<[^\\P{Graph}>]+(?: [^>]*)?>", "");
-    	Pattern pattern = Pattern.compile("(<a(.*)>).*(</a>)");
-    	  // Replace all HTML tags with an empty string
-    	captchaHtml=  pattern.matcher(captchaHtml).replaceFirst("");
-    	model.addAttribute("captchaHtml", captchaHtml);
-    	model.addAttribute("instanceId", captcha.getCurrentInstanceId());
-        return "home";
-    }
-    
-    @RequestMapping(value ="/valid", method = RequestMethod.POST)
-    public String validate(HttpServletRequest request, ModelMap model,
-    		@RequestParam(name = "captchaCode") String captchaCode,
-    		@RequestParam(name = "instanceId") String instanceId) {
-    	String code = request.getParameter("code");
-    	
-//    	Captcha captcha = Captcha.load(request, "exampleCaptcha");
-//    	 boolean isHuman = captcha.validate(captchaCode, instanceId);
-    	 boolean isHuman = Captcha.validate(request, "exampleCaptcha", captchaCode, instanceId);
-    	String captchaHtml = isHuman ? "YES": "NO";
-    	model.addAttribute("captchaHtml", captchaHtml);
-        return "home";
-    }
+	@Autowired
+	public HelloController() {
+	    this.restTemplate = new RestTemplate();
+	}
+
+	private final String SITE_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
+	private final String SECRET = "";
+
+	@RequestMapping(value = "/home", method = RequestMethod.GET)
+	public String defaultPage(HttpServletRequest request, ModelMap model) {
+	//TODO
+		return "home";
+	}
+
+	@RequestMapping(value = "/captcha-disp", method = RequestMethod.GET)
+	public String displayCaptcha(HttpServletRequest request, ModelMap model) {
+	//TODO
+		return "captcha_view";
+	}
+	
+	private String getRemoteIp(HttpServletRequest request) {
+		String remoteAddr = "";
+		if (request != null) {
+			remoteAddr = request.getHeader("X-FORWARDED-FOR");
+			if (remoteAddr == null || "".equals(remoteAddr)) {
+				remoteAddr = request.getRemoteAddr();
+			}
+		}
+
+		return remoteAddr;
+	}
+
+	@RequestMapping(value = "/valid", method = RequestMethod.POST)
+	public String validate(HttpServletRequest request, ModelMap model,
+			@RequestParam(name = "g-recaptcha-response") String response) {
+		try {
+
+			HttpHeaders headers = new HttpHeaders();
+			headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+			MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
+			map.add("secret", SECRET);
+			map.add("remoteip", getRemoteIp(request));
+			map.add("response", response);
+			HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(map, headers);
+			ResponseEntity<?> responseent = restTemplate.postForEntity(SITE_VERIFY_URL, requestEntity, String.class);
+
+			Gson gson = new GsonBuilder().setPrettyPrinting().create();
+			JsonElement element = gson.fromJson (responseent.getBody().toString(), JsonElement.class);
+			JsonObject jsonObj = element.getAsJsonObject();
+			@SuppressWarnings("unchecked")
+			Map<String,Object> resultMap = new Gson().fromJson(jsonObj, Map.class);
+			if (resultMap.get("success") != null && true == (Boolean)resultMap.get("success")) {
+				model.addAttribute("captchaHtml", "SUCESS: " + resultMap.get("hostname"));
+			} else {
+				model.addAttribute("captchaHtml",
+						"FAILED: " + resultMap.get("hostname") + " - " + resultMap.get("error-codes"));
+			}
+		} catch (Exception e) {
+			model.addAttribute("captchaHtml", "ERROR SYSTEM");
+		}
+		return "home";
+	}
 }

@@ -48,12 +48,33 @@ body {font-family: "Lato", sans-serif}
   <!-- The Contact Section -->
   <div class="w3-container w3-content w3-padding-64" style="max-width:800px" id="contact">
  	$!{captchaHtml}
- 	<form method="POST" 
-          action="/valid">
- 	<input name="captchaCode" id="captchaCode" type = "text" />
- 	<input name="instanceId" value="$!{instanceId}" />
- 	<input type = "submit" value ="Submit" />
- 	</form>
+ 	<br><br>
+ 	
+ 	<button onclick="displayCaptcha();">Display Captcha</button>
+ 	
+ 	<div id="result"></div>
+ 	
+ 	
+ 	  <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+ 	<script>
+
+function displayCaptcha(){
+
+  $.ajax({
+    type: "GET",
+    url: "/captcha-disp",
+    dataType:"html",
+    success: function(data){
+        $( "#result" ).html(data);
+    }
+  }).fail(function() {
+          console.log("ERROR");
+   });
+   
+}
+  
+ 
+ 	</script>
   </div>
   
 <!-- End Page Content -->
